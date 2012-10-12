@@ -263,14 +263,43 @@ class MavikThumbGenerator extends JObject {
             }
         }
     }
-    
+
+    /**
+     * Get absolute path
+     * 
+     * @param string $path
+     * @return string 
+     */
+    protected function pathToAbsolute($path)
+    {
+        if(strpos($path, '/')===0) {
+            return $path;
+        } else {
+            return JPATH_ROOT.DS.$path;
+        }
+    }
+
+    /**
+     * Get URL from path
+     * 
+     * @param string $path
+     * @return string
+     */
+    protected function pathToUrl($path) {
+        $base = JURI::base(true);
+        
+        if(strpos($path, JPATH_SITE) === 0) {
+            return $base.substr($path, strlen(JPATH_SITE));
+        }
+    }
+        
     /**
      * Get safe name
      * 
      * @param string $name
      * @return string 
      */
-    private function getSafeName($name)
+    protected function getSafeName($name)
     {
         return JFile::makeSafe(str_replace(array('/','\\'), '-', $name));
     }
