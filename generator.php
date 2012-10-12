@@ -285,7 +285,8 @@ class MavikThumbGenerator extends JObject {
      * @param string $path
      * @return string
      */
-    protected function pathToUrl($path) {
+    protected function pathToUrl($path)
+    {
         $base = JURI::base(true);
         
         if(strpos($path, JPATH_SITE) === 0) {
@@ -293,6 +294,20 @@ class MavikThumbGenerator extends JObject {
         }
     }
         
+    protected function isUrlLocal($url)
+    {
+        $siteUri = JFactory::getURI();
+        $imgUri = JURI::getInstance($url);
+
+        $siteHost = $siteUri->getHost();
+        $imgHost = $imgUri->getHost();
+        // ignore www in host name
+        $siteHost = preg_replace('/^www\./', '', $siteHost);
+        $imgHost = preg_replace('/^www\./', '', $imgHost);
+        
+        return (empty($imgHost) || $imgHost == $siteHost);
+    }        
+
     /**
      * Get safe name
      * 
