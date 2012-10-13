@@ -8,6 +8,8 @@
  * @copyright 2012 Vitaliy Marenkov
  */
 
+defined( '_JEXEC' ) or die;
+
 jimport('mavik.thumb.resizetype.default');
 
 /**

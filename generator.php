@@ -8,6 +8,8 @@
  * @copyright 2012 Vitaliy Marenkov
  */
 
+defined( '_JEXEC' ) or die;
+
 jimport('joomla.filesystem.file');
 jimport('joomla.filesystem.folder');
 jimport('mavik.thumb.info');
@@ -54,7 +56,7 @@ class MavikThumbGenerator extends JObject {
      * 
      * @param array $options 
      */
-    public function __construct(array $options)
+    public function __construct(array $options = array())
     {
         // Check the server requirements only one
         static $checked = false;
@@ -65,6 +67,25 @@ class MavikThumbGenerator extends JObject {
         
         // Set options
         $this->options = array_merge($this->options, $options);
+        
+        // Check and create, if it's need, directories
+        $indexFile = '<html><body bgcolor="#FFFFFF"></body></html>';
+        $dir = JPATH_SITE.DS.$this->options['thumbDir'];
+        if (!JFolder::exists($dir)) {
+            if (!JFolder::create($dir, 0777)) {
+                $this->setError(JText::_('Can\'t create directory').': '.$dir);
+                $this->setError(JText::_('Change the permissions for parent folder to 777'));
+            }
+            JFile::write($dir.DS.'index.html', $indexFile);
+        }
+        $dir = JPATH_SITE.DS.$this->options['remoteDir'];
+        if (!JFolder::exists($dir)) {
+            if (!JFolder::create($dir, 0777)) {
+                $this->setError(JText::_('Can\'t create directory').': '.$dir);
+                $this->setError(JText::_('Change the permissions for parent folder to 777'));
+            }
+            JFile::write($dir.DS.'index.html', $indexFile);
+        }
         
         // Include resize class
         $this->setResizeType($this->options['resizeType']);
@@ -102,7 +123,7 @@ class MavikThumbGenerator extends JObject {
      * @param int $height Height of thumbnail
      * @return MavikThumbInfo
      */
-    public function getThumb(string $src, int $width = 0, int $height = 0)
+    public function getThumb($src, $width = 0, $height = 0)
     {
         $info = new MavikThumbInfo();
         
@@ -217,7 +238,7 @@ class MavikThumbGenerator extends JObject {
      * @param string $src
      * @param MavikThumbInfo
      */
-    protected function getOriginalInfoPath(string $src, MavikThumbInfo $info)
+    protected function getOriginalInfoPath($src, MavikThumbInfo $info)
     {
         /*
          *  Is it URL or PATH?
@@ -228,7 +249,7 @@ class MavikThumbGenerator extends JObject {
              */
             $info->original->local = true;
             $info->original->path = $this->pathToAbsolute($src);
-            $info->original->url = $this->pathToUrl($src);
+            $info->original->url = $this->pathToUrl($info->original->path);
         } else {
             /*
              *  $src IS URL
@@ -239,8 +260,9 @@ class MavikThumbGenerator extends JObject {
                 /*
                  * Local image
                  */
-                $info->original->url = $this->urlToAbsolute($src);
-                $info->original->path = $this->urlToPath($info->original->url);
+                $uri = JURI::getInstance($src);
+                $info->original->url = $uri->getPath();
+                $info->original->path = $this->urlToPath($src);
             } else {
                 /*
                  * Remote image
@@ -248,9 +270,9 @@ class MavikThumbGenerator extends JObject {
                 if($this->options['copyRemote'] && $this->options['remoteDir'] ) {
                     // Copy remote image
                     $fileName = $this->getSafeName($src);
-                    $localFile = JPATH_ROOT.DS.$this->options['remoteDir'] . DS . $fileName;                    
-                    JFile::copy($src, $localFile); // Родная функция не работает с url
-                    //copy($src, $localFile);
+                    $localFile = JPATH_ROOT.DS.$this->options['remoteDir'].DS.$fileName;                    
+                    //JFile::copy($src, $localFile); // Родная функция не работает с url
+                    copy($src, $localFile);
                     
                     // New url and path
                     $info->original->path = $localFile;
@@ -272,15 +294,13 @@ class MavikThumbGenerator extends JObject {
      */
     protected function pathToAbsolute($path)
     {
-        if(strpos($path, '/')===0) {
-            return $path;
-        } else {
-            return JPATH_ROOT.DS.$path;
-        }
+        // $paht is c:\<path> or \<path> or /<path> or <path>
+        if (!preg_match('/^\\\|\/|([a-z]\:)/i', $path)) $path = JPATH_ROOT.DS.$path;
+        return realpath($path);
     }
 
     /**
-     * Get URL from path
+     * Get URL from absolute path
      * 
      * @param string $path
      * @return string
@@ -288,10 +308,9 @@ class MavikThumbGenerator extends JObject {
     protected function pathToUrl($path)
     {
         $base = JURI::base(true);
+        $path = substr($path, strlen(JPATH_SITE));
         
-        if(strpos($path, JPATH_SITE) === 0) {
-            return $base.substr($path, strlen(JPATH_SITE));
-        }
+        return $base.str_replace(DS, '/', $path);
     }
         
     protected function isUrlLocal($url)
@@ -320,36 +339,19 @@ class MavikThumbGenerator extends JObject {
     }
     
     /**
-        * Преобразует url-путь в путь к файлу
-        * если хост в url совпадает с url сайта,
-        * иначе оставляет без изменений
-        *
-        * @param string $url
-        */
+    * Convert local url to path
+     * 
+    * @param string $url
+    */
     public static function urlToPath($url)
     {
-            $siteUri = JFactory::getURI();
-            $imgUri = JURI::getInstance($url);
-
-            $siteHost = $siteUri->getHost();
-            $imgHost = $imgUri->getHost();
-            // игнорировать www при сверке хостов 
-            $siteHost = preg_replace('/^www\./', '', $siteHost);
-            $imgHost = preg_replace('/^www\./', '', $imgHost);
-            if (empty($imgHost) || $imgHost == $siteHost) {
-                    $imgPath = $imgUri->getPath(); 
-                    // если путь к изображению абсолютный от корня домена (начинается со слеша),
-                    // преобразовать его в относительный от базового адреса сайта
-                    if ($imgPath[0] == '/')	{
-                            $siteBase = $siteUri->base();
-                            $dirSite = substr($siteBase, strpos($siteBase, $siteHost) + strlen($siteHost));
-                            $url = substr($imgPath, strlen($dirSite));
-                    }
-                    $url = urldecode(str_replace('/', DS, $url));
-            }
-            return $url;
-    }
-    
-    
+        $imgUri = JURI::getInstance($url);
+        $path = $imgUri->getPath();
+        $base = JURI::base(true);
+        if($base && strpos($path, $base) === 0) {
+            $path = substr($path, strlen($base));
+        }
+        return realpath(JPATH_ROOT.DS.str_replace('/', DS, $path));
+    }    
 }
 ?>

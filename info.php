@@ -8,6 +8,8 @@
  * @copyright 2012 Vitaliy Marenkov
  */
 
+defined( '_JEXEC' ) or die;
+
 /**
  * Information about thumbnail and original image
  */
