@@ -16,5 +16,17 @@ defined( '_JEXEC' ) or die;
  */
 class MavikThumbResizeType
 {
+    /**
+     * Set thumnail size
+     * 
+     * @param MavikThumbInfo $info
+     * @param int $width
+     * @param int $height
+     */
+    public function setSize(MavikThumbInfo $info, $width, $height)
+    {
+        $info->thumbnail->width = $width;
+        $info->thumbnail->height = $height;
+    }
 }
 ?>

@@ -135,13 +135,20 @@ class MavikThumbGenerator extends JObject {
         }
     }
 
+    /**
+     * Get info about original image and thumbnail
+     * 
+     * @param string $src Path or url to original image
+     * @param type $width Desired width for thumbnail
+     * @param type $height Desired height for thumbnail
+     */
     protected function getImageInfo($src, $width, $height)
     {
         $info = new MavikThumbInfo();
         $this->getOriginalInfoPath($src, $info);
         $this->getOriginalSize($info);
-        $this->getThumbSize($info);
-        $this->getThumbInfoPath($info);
+        $this->setThumbSize($info, $width, $height);
+        $this->setThumbInfoPath($info);
     }
 
     /**
@@ -184,7 +191,7 @@ class MavikThumbGenerator extends JObject {
                     // Copy remote image
                     $fileName = $this->getSafeName($src);
                     $localFile = JPATH_ROOT.DS.$this->options['remoteDir'].DS.$fileName;                    
-                    //JFile::copy($src, $localFile); // Родная функция не работает с url
+                    //JFile::copy($src, $localFile); // JFile don't work with url
                     copy($src, $localFile);
                     
                     // New url and path
@@ -226,6 +233,22 @@ class MavikThumbGenerator extends JObject {
         $info->original->height = $size[1];
         $info->original->type = $size['mime'];
         $info->original->size = @filesize($info->original->path);
+    }
+
+    /**
+     * Set thumbanil size
+     * 
+     * @param MavikThumbInfo $info
+     * @param int $width
+     * @param int $height
+     */
+    protected function setThumbSize(MavikThumbInfo $info, $width, $height)
+    {
+        // Set widht or height if it is 0
+        if ($width == 0) $width = intval($height * $info->original->width / $info->original->height); 
+        if ($height == 0) $height = intval($width * $info->original->height / $info->original->width);
+        
+        $this->resizeStrategy->setSize($info, $width, $height);
     }
 
     /**
