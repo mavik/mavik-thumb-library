@@ -125,112 +125,25 @@ class MavikThumbGenerator extends JObject {
      */
     public function getThumb($src, $width = 0, $height = 0)
     {
-        $info = new MavikThumbInfo();
-        
-        $this->getOriginalInfoPath($src, $info);
+        $info = $this->getImageInfo($src, $width, $height);
     
-        
-       
-        
-        // Доопределить размеры, если необходимо
-        if ($width == 0) {
-            $width = intval($height * $info->size[0] / $info->size[1]); 
+        // Is there thumbnail in cache?
+        if($this->thumbExists($info)) {
+            return $info;
+        } else {
+            // There isn't thumbnail in cache
         }
-        if ($height == 0) {
-            $height(intval($width * $info->sizcreateThumbe[1] / $info->size[0]));
-        }
-        
-        // Сформировать путь к иконке
-        $thumbName = $this->getSafeName($this->origImgName);
-        $thumbName = JFile::stripExt($thumbName) . '-'.$this->img->getWidth() . 'x' . $this->img->getHeight().'.'.JFile::getExt($thumbName);
-        $thumbPath = JPATH_BASE . DS . $this->thumbPath . DS . $thumbName; 
-        // Если иконки не существует - создать
-        if (!file_exists($thumbPath))
-        {
-                // Проверить хватит ли памяти
-                $allocatedMemory = ini_get('memory_limit')*1048576 - memory_get_usage(true);
-                $neededMemory = $this->origImgSize[0] * $this->origImgSize[1] * 4;
-                $neededMemory *= 1.25; // Прибавляем 25% на накладные расходы
-                if ($neededMemory >= $allocatedMemory) {
-                        $this->originalSrc = $this->img->getAttribute('src');
-                        $this->img->setAttribute('src', '');
-                        $app = &JFactory::getApplication();
-                        $app->enqueueMessage(JText::_('You use too big image'), 'error');
-                        return;
-                }
-
-                // Определить тип оригинального изображения
-                $mime = $this->origImgSize['mime'];
-                // В зависимости от этого создать объект изобразения
-                switch ($mime)
-                {
-                        case 'image/jpeg':
-                                $orig = imagecreatefromjpeg($this->origImgName);
-                                break;
-                        case 'image/png':
-                                $orig = imagecreatefrompng($this->origImgName);
-                                break;
-                        case 'image/gif':
-                                $orig = imagecreatefromgif($this->origImgName);
-                                break;
-                        default:
-                                // Если тип не поддерживается - вернуть тег без изменений
-                                $this->originalSrc = $this->img->getAttribute('src');
-                                return;
-                }
-                // Создать объект иконки
-                $thumb = imagecreatetruecolor($this->img->getWidth(), $this->img->getHeight());
-                // Обработать прозрачность
-                if ($mime == 'image/png' || $mime == 'image/gif') {
-                        $transparent_index = imagecolortransparent($orig);
-                        if ($transparent_index >= 0 && $transparent_index < imagecolorstotal($orig))
-                        {
-                                // без альфа-канала
-                                $t_c = imagecolorsforindex($orig, $transparent_index);
-                                $transparent_index = imagecolorallocate($orig, $t_c['red'], $t_c['green'], $t_c['blue']);
-                                imagefilledrectangle( $thumb, 0, 0, $this->img->getWidth(), $this->img->getHeight(), $transparent_index );
-                                imagecolortransparent($thumb, $transparent_index);
-                        }
-                        if ($mime == 'image/png') {
-                                // с альфа-каналом
-                                imagealphablending ( $thumb, false );
-                                imagesavealpha ( $thumb, true );
-                                $transparent = imagecolorallocatealpha ( $thumb, 255, 255, 255, 127 );
-                                imagefilledrectangle( $thumb, 0, 0, $this->img->getWidth(), $this->img->getHeight(), $transparent );
-                        }
-                }
-
-                // Создать превью
-                list($x, $y, $widht, $height) = $this->proportionsStrategy->getArea();
-                imagecopyresampled($thumb, $orig, 0, 0, $x, $y, $this->img->getWidth(), $this->img->getHeight(), $widht, $height);
-                // Записать иконку в файл
-                switch ($mime)
-                {
-                        case 'image/jpeg':
-                                if (!imagejpeg($thumb, $thumbPath, $this->quality)) {
-                                        $this->errorCreateFile($thumbPath);
-                                }
-                                break;
-                        case 'image/png':
-                                if (!imagepng($thumb, $thumbPath)) {
-                                        $this->errorCreateFile($thumbPath);
-                                }
-                                break;
-                        case 'image/gif':
-                                if (!imagegif($thumb, $thumbPath)) {
-                                        $this->errorCreateFile($thumbPath);
-                                }
-                }
-                imagedestroy($orig);
-                imagedestroy($thumb);
-        }
-        $this->originalSrc = $this->img->getAttribute('src');
-        $this->img->setAttribute('src', $this->thumbPath . '/' . $thumbName);
     }
 
-    
-    
-    
+    protected function getImageInfo($src, $width, $height)
+    {
+        $info = new MavikThumbInfo();
+        $this->getOriginalInfoPath($src, $info);
+        $this->getOriginalSize($info);
+        $this->getThumbSize($info);
+        $this->getThumbInfoPath($info);
+    }
+
     /**
      * Get info about URL and path of original image.
      * And copy remote image if it's need.
@@ -287,6 +200,35 @@ class MavikThumbGenerator extends JObject {
     }
 
     /**
+     * Get size and type of original image
+     * 
+     * @param MavikThumbInfo $info
+     */
+    protected function getOriginalSize(MavikThumbInfo $info)
+    {
+        // Get size and type of image. Use info-file for remote image
+        $useInfoFile = !$info->original->local && !$this->options['copyRemote'] && $this->options['remoteDir'];
+        if($useInfoFile) {
+            $infoFile = $this->getSafeName($info->original->url, $this->options['remoteDir'], '', 'info');
+            if(file_exists($infoFile)) {
+                $size = unserialize(file_get_contents($infoFile));
+            }
+        }
+        if (!isset($size)) {
+            $size = getimagesize($info->original->path);
+            if($useInfoFile) {
+                file_put_contents($infoFile, serialize($size));
+            }
+        }
+        
+        // Put values to $info
+        $info->original->width = $size[0];
+        $info->original->height = $size[1];
+        $info->original->type = $size['mime'];
+        $info->original->size = @filesize($info->original->path);
+    }
+
+    /**
      * Get absolute path
      * 
      * @param string $path
@@ -313,6 +255,12 @@ class MavikThumbGenerator extends JObject {
         return $base.str_replace(DS, '/', $path);
     }
         
+    /**
+     * Is URL local?
+     * 
+     * @param string $url
+     * @return boolean
+     */
     protected function isUrlLocal($url)
     {
         $siteUri = JFactory::getURI();
@@ -330,20 +278,44 @@ class MavikThumbGenerator extends JObject {
     /**
      * Get safe name
      * 
-     * @param string $name
+     * @param string $path Path to file
+     * @param string $dir Directory for result file
+     * @param string $suffix Suffix for name of file (example size for thumbnail)
+     * @param string $ext New extension
      * @return string 
      */
-    protected function getSafeName($name)
+    protected function getSafeName($path, $dir, $suffix = '', $ext = null)
     {
-        return JFile::makeSafe(str_replace(array('/','\\'), '-', $name));
+        if(!$this->options['subDirs']) {
+            // Without subdirs
+            $name = JFile::makeSafe(str_replace(array('/','\\'), '-', $path));
+            $name = JFile::stripExt($name).$suffix.'.'.($ext ? $ext : JFile::getExt($name));
+            $path = JPATH_ROOT.DS.$dir.DS.$name; 
+        } else {
+            // With subdirs
+            $name = JFile::makeSafe(JFile::getName($path));
+            $name = JFile::stripExt($name).$suffix.'.'.($ext ? $ext : JFile::getExt($name));
+            $path = JPATH_BASE.DS.$dir.DS.$path;
+            $path = str_replace('\\', DS, $path);
+            $path = str_replace('/', DS, $path);
+            $path = substr($path, 0, strrpos($path, DS));
+            if(!JFolder::exists($path)) {
+                JFolder::create($path, 0777);
+                $indexFile = '<html><body bgcolor="#FFFFFF"></body></html>';
+                JFile::write($path.DS.'index.html', $indexFile);
+            }
+            $path = $path . DS . $name;            
+        }
+        
+        return $path;
     }
     
     /**
     * Convert local url to path
-     * 
+    * 
     * @param string $url
     */
-    public static function urlToPath($url)
+    protected static function urlToPath($url)
     {
         $imgUri = JURI::getInstance($url);
         $path = $imgUri->getPath();
@@ -352,6 +324,13 @@ class MavikThumbGenerator extends JObject {
             $path = substr($path, strlen($base));
         }
         return realpath(JPATH_ROOT.DS.str_replace('/', DS, $path));
-    }    
+    }
+    
+    protected function thumbExists(MavikThumbInfo $info)
+    {
+        if(file_exists($info->thumbnail->path)) {
+            $infoFile = '';
+        }
+    }
 }
 ?>
