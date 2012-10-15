@@ -145,10 +145,10 @@ class MavikThumbGenerator extends JObject {
     protected function getImageInfo($src, $width, $height)
     {
         $info = new MavikThumbInfo();
-        $this->getOriginalInfoPath($src, $info);
+        $this->getOriginalPath($src, $info);
         $this->getOriginalSize($info);
         $this->setThumbSize($info, $width, $height);
-        $this->setThumbInfoPath($info);
+        $this->setThumbPath($info);
     }
 
     /**
@@ -158,7 +158,7 @@ class MavikThumbGenerator extends JObject {
      * @param string $src
      * @param MavikThumbInfo
      */
-    protected function getOriginalInfoPath($src, MavikThumbInfo $info)
+    protected function getOriginalPath($src, MavikThumbInfo $info)
     {
         /*
          *  Is it URL or PATH?
@@ -250,6 +250,18 @@ class MavikThumbGenerator extends JObject {
         
         $this->resizeStrategy->setSize($info, $width, $height);
     }
+    
+    /**
+     * Set path and url of thumbnail
+     * 
+     * @param MavikThumbInfo $info
+     */
+    protected function setThumbPath(MavikThumbInfo $info)
+    {
+        $suffix = "-{$info->thumbnail->width}x{$info->thumbnail->height}";
+        $info->thumbnail->path = $this->getSafeName($info->original->path, $this->options['thumbDir'], $suffix);
+        $info->thumbnail->url = $this->pathToUrl($info->thumbnail->path);
+    }   
 
     /**
      * Get absolute path
