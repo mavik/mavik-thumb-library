@@ -14,7 +14,7 @@ defined( '_JEXEC' ) or die;
  * Strategy of resizing
  * Parent class
  */
-class MavikThumbResizeType
+abstract class MavikThumbResizeType
 {
     /**
      * Set thumnail size
@@ -28,5 +28,16 @@ class MavikThumbResizeType
         $info->thumbnail->width = $width;
         $info->thumbnail->height = $height;
     }
+    
+    /**
+     * Coordinates and size of area in the original image
+     * 
+     * @return array
+     */
+    function getArea(MavikThumbInfo $info)
+    {
+        return array(0, 0, $info->thumbnail->width, $info->thumbnail->height);
+    }
+    
 }
 ?>

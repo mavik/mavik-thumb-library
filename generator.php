@@ -31,13 +31,23 @@ jimport('mavik.thumb.info');
 class MavikThumbGenerator extends JObject {
     
     /**
+     * Codes of errors
+     */
+    const ERROR_DIRECTORY_CREATION = 1;
+    const ERROR_FILE_CREATION = 2;
+    const ERROR_GD2_IS_MISSING = 3;
+    const ERROR_NOT_ENOUGH_MEMORY = 4;    
+    const ERROR_UNSUPPORTED_TYPE = 5;
+
+
+    /**
      * Options
      * 
      * @var array
      */
     var $options = array(
         'thumbDir' => 'images/thumbnails', // Directory for thumbnails
-        'subDirs' => false, // Create subdirectories in thumbnail derectory
+        'subDirs' => true, // Create subdirectories in thumbnail derectory
         'copyRemote' => false, // Copy remote images
         'remoteDir' => 'images/remote', // Directory for copying remote images or info about them
         'quality' => 90, // Quality of jpg-images
@@ -73,16 +83,14 @@ class MavikThumbGenerator extends JObject {
         $dir = JPATH_SITE.DS.$this->options['thumbDir'];
         if (!JFolder::exists($dir)) {
             if (!JFolder::create($dir, 0777)) {
-                $this->setError(JText::_('Can\'t create directory').': '.$dir);
-                $this->setError(JText::_('Change the permissions for parent folder to 777'));
+                throw new Exception(JText::sprintf( 'Can\'t create directory', $dir ), self::ERROR_DIRECTORY_CREATION);
             }
             JFile::write($dir.DS.'index.html', $indexFile);
         }
         $dir = JPATH_SITE.DS.$this->options['remoteDir'];
         if (!JFolder::exists($dir)) {
             if (!JFolder::create($dir, 0777)) {
-                $this->setError(JText::_('Can\'t create directory').': '.$dir);
-                $this->setError(JText::_('Change the permissions for parent folder to 777'));
+                throw new Exception(JText::sprintf( 'Can\'t create directory', $dir ), self::ERROR_DIRECTORY_CREATION);
             }
             JFile::write($dir.DS.'index.html', $indexFile);
         }
@@ -99,7 +107,7 @@ class MavikThumbGenerator extends JObject {
     {
         // Check version of GD
         if (!function_exists('imagecreatetruecolor')) {
-                $this->setError(JText::_('Library mAvik Thumb needs library GD2'));
+            throw new Exception(JText::_('Library mAvik Thumb needs library GD2'), self::ERROR_GD2_IS_MISSING);
         }
     }
     
@@ -126,13 +134,80 @@ class MavikThumbGenerator extends JObject {
     public function getThumb($src, $width = 0, $height = 0)
     {
         $info = $this->getImageInfo($src, $width, $height);
-    
-        // Is there thumbnail in cache?
-        if($this->thumbExists($info)) {
-            return $info;
-        } else {
-            // There isn't thumbnail in cache
+        
+        // Is not there thumbnail in cache?
+        if(!$this->thumbExists($info)) {
+            
+            // Test limit of memory 
+            $allocatedMemory = ini_get('memory_limit')*1048576 - memory_get_usage(true);
+            $neededMemory = $info->original->width * $info->original->height * 4;
+            $neededMemory *= 1.25; // +25%
+            if ($neededMemory >= $allocatedMemory) {
+                throw new Exception(JText::_('Not enough menory'), self::ERROR_NOT_ENOUGH_MEMORY);
+            }
+
+            // Create object for original image
+            switch ($info->original->type)
+            {
+                case 'image/jpeg':
+                    $orig = imagecreatefromjpeg($info->original->path);
+                    break;
+                case 'image/png':
+                    $orig = imagecreatefrompng($info->original->path);
+                    break;
+                case 'image/gif':
+                    $orig = imagecreatefromgif($info->original->path);
+                    break;
+                default:
+                    throw new Exception(JText::sprintf('Unsupported type of image', $info->original->type), self::ERROR_UNSUPPORTED_TYPE);
+            }
+            // Create object for thumbnail
+            $thumb = imagecreatetruecolor($info->thumbnail->width, $info->thumbnail->height);
+            // Transparent
+            if ($info->original->type == 'image/png' || $info->original->type == 'image/gif') {
+                    $transparentIndex = imagecolortransparent($orig);
+                    if ($transparentIndex >= 0 && $transparentIndex < imagecolorstotal($orig))
+                    {
+                            // without alpha-chanel
+                            $tc = imagecolorsforindex($orig, $transparentIndex);
+                            $transparentIndex = imagecolorallocate($orig, $tc['red'], $tc['green'], $tc['blue']);
+                            imagefilledrectangle( $thumb, 0, 0, $info->thumbnail->width, $info->thumbnail->height, $transparentIndex );
+                            imagecolortransparent($thumb, $transparentIndex);
+                    }
+                    if ($info->original->type == 'image/png') {
+                            // with alpha-chanel
+                            imagealphablending ( $thumb, false );
+                            imagesavealpha ( $thumb, true );
+                            $transparent = imagecolorallocatealpha ( $thumb, 255, 255, 255, 127 );
+                            imagefilledrectangle( $thumb, 0, 0, $this->img->getWidth(), $this->img->getHeight(), $transparent );
+                    }
+            }
+
+            // Create thumbnail
+            list($x, $y, $widht, $height) = $this->resizeStrategy->getArea();
+            imagecopyresampled($thumb, $orig, 0, 0, $x, $y, $info->original->width, $info->original->height, $widht, $height);
+            // Write thumbnail to file
+            switch ($info->original->type)
+            {
+                    case 'image/jpeg':
+                            $result = imagejpeg($thumb, $info->original->path, $this->options['quality']);
+                            break;
+                    case 'image/png':
+                            $result = imagepng($thumb, $info->original->path, $this->options['quality']);
+                            break;
+                    case 'image/gif':
+                            $result = imagegif($thumb, $info->original->path, $this->options['quality']);
+            }
+            
+            if(!$result) {
+                throw new Exception(JText::sprintf('Can\'t create file', $info->thumbnail->path), self::ERROR_FILE_CREATION);
+            }
+
+            imagedestroy($orig);
+            imagedestroy($thumb);
         }
+        
+        return $info;
     }
 
     /**
@@ -149,6 +224,8 @@ class MavikThumbGenerator extends JObject {
         $this->getOriginalSize($info);
         $this->setThumbSize($info, $width, $height);
         $this->setThumbPath($info);
+        
+        return $info;
     }
 
     /**
@@ -189,8 +266,7 @@ class MavikThumbGenerator extends JObject {
                  */               
                 if($this->options['copyRemote'] && $this->options['remoteDir'] ) {
                     // Copy remote image
-                    $fileName = $this->getSafeName($src);
-                    $localFile = JPATH_ROOT.DS.$this->options['remoteDir'].DS.$fileName;                    
+                    $localFile = $this->getSafeName($src, $this->options['remoteDir'], '', false);
                     //JFile::copy($src, $localFile); // JFile don't work with url
                     copy($src, $localFile);
                     
@@ -216,23 +292,30 @@ class MavikThumbGenerator extends JObject {
         // Get size and type of image. Use info-file for remote image
         $useInfoFile = !$info->original->local && !$this->options['copyRemote'] && $this->options['remoteDir'];
         if($useInfoFile) {
-            $infoFile = $this->getSafeName($info->original->url, $this->options['remoteDir'], '', 'info');
+            $infoFile = $this->getSafeName($info->original->url, $this->options['remoteDir'], '', false, 'info');
+            
             if(file_exists($infoFile)) {
                 $size = unserialize(file_get_contents($infoFile));
+                $info->original->size = @$size['filesize'];
             }
-        }
-        if (!isset($size)) {
+            
+            if (!isset($size)) {
+                $size = getimagesize($info->original->path);
+                $info->original->size = JFilesystemHelper::remotefsize($info->original->url);
+                $size['filesize'] = $info->original->size;
+                if($useInfoFile) {
+                    file_put_contents($infoFile, serialize($size));
+                }
+            }            
+        } else {
             $size = getimagesize($info->original->path);
-            if($useInfoFile) {
-                file_put_contents($infoFile, serialize($size));
-            }
+            $info->original->size = @filesize($info->original->path);
         }
-        
+
         // Put values to $info
         $info->original->width = $size[0];
         $info->original->height = $size[1];
         $info->original->type = $size['mime'];
-        $info->original->size = @filesize($info->original->path);
     }
 
     /**
@@ -259,8 +342,9 @@ class MavikThumbGenerator extends JObject {
     protected function setThumbPath(MavikThumbInfo $info)
     {
         $suffix = "-{$info->thumbnail->width}x{$info->thumbnail->height}";
-        $info->thumbnail->path = $this->getSafeName($info->original->path, $this->options['thumbDir'], $suffix);
+        $info->thumbnail->path = $this->getSafeName($info->original->path, $this->options['thumbDir'], $suffix, $info->original->local);
         $info->thumbnail->url = $this->pathToUrl($info->thumbnail->path);
+        $info->thumbnail->local = true;
     }   
 
     /**
@@ -319,8 +403,18 @@ class MavikThumbGenerator extends JObject {
      * @param string $ext New extension
      * @return string 
      */
-    protected function getSafeName($path, $dir, $suffix = '', $ext = null)
+    protected function getSafeName($path, $dir, $suffix = '', $isLocal = true, $ext = null)
     {
+        if(!$isLocal) {
+            $uri = JURI::getInstance($path);
+            $path = $uri->getHost().$uri->getPath().$uri->getQuery();
+        }
+        
+        var_dump($path);
+        
+        // Absolute path to relative
+        if(strpos($path, JPATH_SITE) === 0) $path = substr($path, strlen(JPATH_SITE)+1);
+
         if(!$this->options['subDirs']) {
             // Without subdirs
             $name = JFile::makeSafe(str_replace(array('/','\\'), '-', $path));
@@ -361,11 +455,15 @@ class MavikThumbGenerator extends JObject {
         return realpath(JPATH_ROOT.DS.str_replace('/', DS, $path));
     }
     
+    /**
+     * Do thumbnail exist?
+     * 
+     * @param MavikThumbInfo $info
+     * @return boolean
+     */
     protected function thumbExists(MavikThumbInfo $info)
     {
-        if(file_exists($info->thumbnail->path)) {
-            $infoFile = '';
-        }
+        return JFile::exists($info->thumbnail->path);
     }
 }
 ?>

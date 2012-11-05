@@ -28,7 +28,7 @@ class MavikThumbInfo {
      * @var MavikThumbImageInfo
      */    
     var $thumbnail;
-
+    
     public function __construct() {
         $this->original = new MavikThumbImageInfo();
         $this->thumbnail = new MavikThumbImageInfo();

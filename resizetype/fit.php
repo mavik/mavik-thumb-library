@@ -10,7 +10,7 @@
 
 defined( '_JEXEC' ) or die;
 
-jimport('mavik.thumb.resizetype.default');
+jimport('mavik.thumb.resizetype.abstract');
 
 /**
  * Fit area
