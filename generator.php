@@ -176,27 +176,27 @@ class MavikThumbGenerator extends JObject {
                     }
                     if ($info->original->type == 'image/png') {
                             // with alpha-chanel
-                            imagealphablending ( $thumb, false );
-                            imagesavealpha ( $thumb, true );
-                            $transparent = imagecolorallocatealpha ( $thumb, 255, 255, 255, 127 );
+                            imagealphablending( $thumb, false );
+                            imagesavealpha( $thumb, true );
+                            $transparent = imagecolorallocatealpha( $thumb, 255, 255, 255, 127 );
                             imagefilledrectangle( $thumb, 0, 0, $this->img->getWidth(), $this->img->getHeight(), $transparent );
                     }
             }
 
             // Create thumbnail
-            list($x, $y, $widht, $height) = $this->resizeStrategy->getArea();
-            imagecopyresampled($thumb, $orig, 0, 0, $x, $y, $info->original->width, $info->original->height, $widht, $height);
+            list($x, $y, $widht, $height) = $this->resizeStrategy->getArea($info);
+            imagecopyresampled($thumb, $orig, 0, 0, $x, $y, $info->thumbnail->width, $info->thumbnail->height, $widht, $height);
             // Write thumbnail to file
             switch ($info->original->type)
             {
                     case 'image/jpeg':
-                            $result = imagejpeg($thumb, $info->original->path, $this->options['quality']);
+                            $result = imagejpeg($thumb, $info->thumbnail->path, $this->options['quality']);
                             break;
                     case 'image/png':
-                            $result = imagepng($thumb, $info->original->path, $this->options['quality']);
+                            $result = imagepng($thumb, $info->thumbnail->path, $this->options['quality']);
                             break;
                     case 'image/gif':
-                            $result = imagegif($thumb, $info->original->path, $this->options['quality']);
+                            $result = imagegif($thumb, $info->thumbnail->path, $this->options['quality']);
             }
             
             if(!$result) {

@@ -36,7 +36,7 @@ abstract class MavikThumbResizeType
      */
     function getArea(MavikThumbInfo $info)
     {
-        return array(0, 0, $info->thumbnail->width, $info->thumbnail->height);
+        return array(0, 0, $info->original->width, $info->original->height);
     }
     
 }
