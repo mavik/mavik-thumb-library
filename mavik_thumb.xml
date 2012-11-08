@@ -15,5 +15,8 @@
 
     <files>
 	<file>index.html</file>
+        <file>generator.php</file>
+        <file>info.php</file>
+        <folder>resizetype</folder>
     </files>
 </extension>
