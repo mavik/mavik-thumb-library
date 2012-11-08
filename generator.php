@@ -51,7 +51,7 @@ class MavikThumbGenerator extends JObject {
         'copyRemote' => false, // Copy remote images
         'remoteDir' => 'images/remote', // Directory for copying remote images or info about them
         'quality' => 90, // Quality of jpg-images
-        'resizeType' => 'fit', // Method of resizing
+        'resizeType' => 'fill', // Method of resizing
     );
 
     /**
@@ -341,7 +341,7 @@ class MavikThumbGenerator extends JObject {
      */
     protected function setThumbPath(MavikThumbInfo $info)
     {
-        $suffix = "-{$info->thumbnail->width}x{$info->thumbnail->height}";
+        $suffix = "-{$this->options['resizeType']}-{$info->thumbnail->width}x{$info->thumbnail->height}";
         $info->thumbnail->path = $this->getSafeName($info->original->path, $this->options['thumbDir'], $suffix, $info->original->local);
         $info->thumbnail->url = $this->pathToUrl($info->thumbnail->path);
         $info->thumbnail->local = true;

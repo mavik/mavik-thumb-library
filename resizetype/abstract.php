@@ -25,8 +25,19 @@ abstract class MavikThumbResizeType
      */
     public function setSize(MavikThumbInfo $info, $width, $height)
     {
-        $info->thumbnail->width = $width;
-        $info->thumbnail->height = $height;
+        switch ($this->getDefaultDimension($info, $width, $height)) {
+            case 'w':
+                $info->thumbnail->width = $width;
+                $info->thumbnail->height = round($info->original->height * $width/$info->original->width);
+                break;
+            case 'h':
+                $info->thumbnail->height = $height;
+                $info->thumbnail->width = round($info->original->width * $height/$info->original->height);
+                break;
+            default:
+                $info->thumbnail->width = $width;
+                $info->thumbnail->height = $height;
+        }
     }
     
     /**
@@ -34,10 +45,19 @@ abstract class MavikThumbResizeType
      * 
      * @return array
      */
-    function getArea(MavikThumbInfo $info)
+    public function getArea(MavikThumbInfo $info)
     {
         return array(0, 0, $info->original->width, $info->original->height);
     }
     
+    /**
+     * Which dimension to use: width or heigth or width and heigth?
+     * 
+     * @return string
+     */
+    protected function getDefaultDimension(MavikThumbInfo $info, $width, $height)
+    {
+            return 'wh';
+    }
 }
 ?>

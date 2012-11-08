@@ -16,7 +16,16 @@ jimport('mavik.thumb.resizetype.abstract');
  * Fit area
  */
 class MavikThumbResizeFit extends MavikThumbResizeType {
-    
+
+    protected function getDefaultDimension(MavikThumbInfo $info, $width, $height)
+    {
+            if ($info->original->width/$width > $info->original->height/$height) {
+                    $defoultSize = 'w';
+            } else {
+                    $defoultSize = 'h';
+            }
+            return $defoultSize;
+    }        
 }
 
 ?>
